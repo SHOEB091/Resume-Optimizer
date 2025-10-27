@@ -1,34 +1,29 @@
-const { parse } = require('tex-parser');  // npm i tex-parser
+// Lightweight LaTeX section parser using regex.
+// Extracts custom rSection blocks and standard \section blocks.
 
-function extractContent(node) {
-  // Simple text extraction - expand as needed
-  return node.content ? node.content.map(c => c.content || c).join(' ') : '';
-}
+export async function parseLatex(latexCode = '') {
+  const sections = {};
 
-async function parseLatex(latexCode) {
-  try {
-    const parsed = parse(latexCode);
-    const sections = {};
-    // Handle custom rSection or standard \section
-    parsed.content.forEach(node => {
-      if (node.command === 'begin' && node.args && node.args[0]?.content === 'rSection') {
-        const sectionName = node.args[1]?.content || 'Unknown';
-        sections[sectionName] = extractContent(node);
-      } else if (node.command === 'section') {
-        sections[node.args[0].content] = extractContent(node);
-      }
-    });
-    return sections;
-  } catch (e) {
-    // Fallback regex for common patterns
-    const sectionRegex = /\\begin\{rSection\}\{([^}]+)\}([\s\S]*?)\\end\{rSection\}/g;
-    const sections = {};
-    let match;
-    while ((match = sectionRegex.exec(latexCode))) {
-      sections[match[1]] = match[2].trim();
-    }
-    return sections;
+  // rSection blocks: \begin{rSection}{Name} ... \end{rSection}
+  const rSectionRegex = /\\begin\{rSection\}\{([^}]+)\}([\s\S]*?)\\end\{rSection\}/g;
+  let m;
+  while ((m = rSectionRegex.exec(latexCode))) {
+    const name = m[1].trim();
+    const content = m[2].trim();
+    sections[name] = content;
   }
-}
 
-module.exports = { parseLatex };
+  // Standard \section{Name}
+  const sectionRegex = /\\section\{([^}]+)\}([\s\S]*?)(?=\\section\{|\\end\{document\}|$)/g;
+  while ((m = sectionRegex.exec(latexCode))) {
+    const name = m[1].trim();
+    const content = m[2].trim();
+    if (!sections[name]) sections[name] = content;
+  }
+
+  // Basic fields if nothing parsed
+  if (Object.keys(sections).length === 0) {
+    sections.Body = latexCode;
+  }
+  return sections;
+}
